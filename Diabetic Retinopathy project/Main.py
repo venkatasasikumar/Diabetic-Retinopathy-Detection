@@ -1,247 +1,147 @@
+
+from tkinter import messagebox
 from tkinter import *
-from tkinter import ttk, filedialog, messagebox
+from tkinter import simpledialog
+import tkinter
+import matplotlib.pyplot as plt
 import numpy as np
-import cv2
+import pandas as pd
+from tkinter import simpledialog
+from tkinter import filedialog
+from keras.models import model_from_json
+from random import randrange
 from numpy.random import randn
-from keras.models import model_from_json, load_model
-from PIL import Image, ImageTk
-from threading import Thread
+import cv2
+from keras.models import load_model
+from matplotlib import pyplot
 
-# ================== MAIN WINDOW ==================
-main = Tk()
-main.title("Diabetic Retinopathy Detection and Severity Grading from Fundus Images Using Hybrid GAN-CNN Framework")
-main.geometry("1350x800")
-main.configure(bg="#f0f2f5")
+main = tkinter.Tk()
+main.title("Diabetic Retinopathy Detection from Eye Fundus Images with Generative Adversarial Network") #designing main screen
+main.geometry("1300x1200")
 
-# ================== GLOBALS ==================
-gan_model = None
-predict_model = None
-preview_window = None
-main_img_tk = None
-dataset_path = None
+global filename
+global gan_model
+global predict_model
 
-# ================== UTILS ==================
-def update_progress(val, msg=""):
-    progress['value'] = val
-    status_lbl.config(text=msg)
-    main.update()
+def upload():
+    text.delete('1.0', END)
+    global filename
+    global X, Y
+    filename = filedialog.askdirectory(initialdir=".")
+    text.delete('1.0', END)
+    text.insert(END,filename+" loaded\n");
 
 def generate_latent_points(latent_dim, n_samples):
-    return randn(latent_dim * n_samples).reshape(n_samples, latent_dim)
+    x_input = randn(latent_dim * n_samples)
+    x_input = x_input.reshape(n_samples, latent_dim)
+    print(x_input.shape)
+    return x_input
 
-def getPrediction(img):
-    img = img.reshape(1, 32, 32, 3)
-    preds = predict_model.predict(img, verbose=0)
-    labels = ['No DR', 'Mild', 'Moderate', 'Severe', 'Proliferative DR']
-    return labels[np.argmax(preds)]
-
-# ================== GAN IMAGE POPUP ==================
-def displayGanImagesPopup(X):
-    """Display 5 random GAN grayscale images with predictions in a popup"""
-    global preview_window
-    if preview_window and preview_window.winfo_exists():
-        preview_window.destroy()
-
-    preview_window = Toplevel(main)
-    preview_window.title("GAN Predicted Images")
-    preview_window.configure(bg="#f0f2f5")
-
-    preview_window.images = []
-
-    for i in range(5):
-        index = np.random.randint(0, len(X))
-        img = X[index]
-        # Normalize [-1,1] -> 0-255
-        img_norm = ((img + 1)/2 * 255).clip(0,255).astype(np.uint8)
-        gray_img = np.mean(img_norm, axis=2).astype(np.uint8)
-        pil_img = Image.fromarray(gray_img).resize((180,180))
-        img_tk = ImageTk.PhotoImage(pil_img)
-
-        result = getPrediction(img)
-
-        lbl_frame = Frame(preview_window, bg="white", bd=2, relief=RIDGE)
-        lbl_frame.grid(row=0, column=i, padx=10, pady=10)
-        lbl_img = Label(lbl_frame, image=img_tk, bg="white")
-        lbl_img.pack()
-        Label(lbl_frame, text=result, bg="white", fg="#333",
-              font=("Segoe UI",10,"bold")).pack(pady=5)
-
-        preview_window.images.append(img_tk)  # keep reference
-
-    Button(preview_window, text="Close", command=preview_window.destroy).grid(row=1, columnspan=5, pady=10)
-
-# ================== GAN MODEL ==================
-def ganModelThread():
-    global gan_model
-    text.insert(END, "Loading GAN model...\n")
-    text.update()
-    update_progress(10, "Loading GAN model...")
-    try:
-        gan_model = load_model('model/generator_model_080.h5')
-        text.insert(END, "GAN model loaded successfully\n")
-        text.update()
-        update_progress(50, "Generating GAN images...")
-        latent_points = generate_latent_points(200, 200)
-        X = gan_model.predict(latent_points, verbose=0)
-        text.insert(END, f"Generated Images Shape: {X.shape}\n")
-        text.update()
-        update_progress(100, "GAN ready")
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to load GAN model: {e}")
-        text.insert(END, "GAN model loading failed\n")
-        text.update()
-        update_progress(0, "GAN failed")
+def create_plot(examples, n):
+    for i in range(n * n):
+        pyplot.subplot(n, n, 1 + i)
+        pyplot.axis('off')
+        pyplot.imshow(examples[i, :, :])
+    pyplot.show()
 
 def ganModel():
-    Thread(target=ganModelThread).start()
-
-# ================== PREDICTION MODEL ==================
-def predictModelThread():
-    global predict_model
-    text.insert(END, "Loading prediction model...\n")
-    text.update()
-    update_progress(10, "Loading prediction model...")
-    try:
-        with open('model/train.json', "r") as json_file:
-            predict_model = model_from_json(json_file.read())
-        predict_model.load_weights("model/train.h5")
-        text.insert(END, "Prediction model loaded successfully\n")
-        text.update()
-        update_progress(100, "Prediction model ready")
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to load prediction model: {e}")
-        text.insert(END, "Prediction model loading failed\n")
-        text.update()
-        update_progress(0, "Prediction model failed")
+    global gan_model
+    gan_model = load_model('model/generator_model_080.h5')
+    latent_points = generate_latent_points(200, 200)
+    X = gan_model.predict(latent_points)
+    text.insert(END,'GAN model generated\n')
+    text.insert(END,'GAN generated new images size : '+str(X.shape)+"\n\n")
+    create_plot(X, 10)
 
 def predictModel():
-    Thread(target=predictModelThread).start()
+    global predict_model
+    text.delete('1.0', END)
+    with open('model/train.json', "r") as json_file:
+        loaded_model_json = json_file.read()
+        predict_model = model_from_json(loaded_model_json)
 
-# ================== GAN PREDICTION ==================
-def predictSeverityThread():
-    if gan_model is None or predict_model is None:
-        messagebox.showerror("Error", "Load both GAN and Prediction models first")
-        return
+    predict_model.load_weights("model/train.h5")
+    predict_model._make_predict_function()
+    print(predict_model.summary())
+    text.insert(END,'See black console to view model summary')
 
-    text.insert(END, "Generating GAN images for prediction...\n")
-    text.update()
-    update_progress(20, "Generating latent points...")
-    latent_points = generate_latent_points(200, 200)
-    update_progress(50, "Generating images...")
-    X = gan_model.predict(latent_points, verbose=0)
-    update_progress(80, "Predicting severity...")
-
-    # Show 5 images in popup
-    main.after(0, lambda: displayGanImagesPopup(X))
-
-    update_progress(100, "GAN prediction completed")
-    text.insert(END, "GAN prediction completed\n")
-    text.update()
+def getPrediction(img):
+    result = 'none'
+    img1 = np.asarray(img)
+    img1 = img1.reshape(1,32,32,3)
+    preds = predict_model.predict(img1) #predicting class of image severity
+    predict = np.argmax(preds) #get then class value
+    result = 'none'
+    if predict == 0:   #if value 0 then result is NO DR
+        result = 'No DR'
+    if predict == 1:   #if value 1 mean result is MILD
+        result = 'Mild'
+    if predict == 2:   #if value 2 mean result is Moderate
+        result = 'Moderate'
+    if predict == 3:   
+        result = 'Severe'
+    if predict == 4:   #if value 4 mean result is Proliferative DR
+        result = 'Proliferative DR'
+    return result    
+    
 
 def predictSeverity():
-    Thread(target=predictSeverityThread).start()
-
-# ================== SINGLE IMAGE ==================
-def uploadAndPredict():
-    global preview_window, main_img_tk
-    if predict_model is None:
-        messagebox.showerror("Error", "Load prediction model first")
-        return
-    file_path = filedialog.askopenfilename(
-        filetypes=[('Image Files', '*.jpg *.png *.jpeg *.bmp')]
-    )
-    if not file_path:
-        return
-
-    pil_img = Image.open(file_path).convert('RGB')
-    img = np.array(pil_img)
-    img_resized = cv2.resize(img, (32,32))
-    result = getPrediction(img_resized)
-
-    text.insert(END, f"{file_path}\nPrediction: {result}\n\n")
-    text.update()
-
-    if preview_window and preview_window.winfo_exists():
-        preview_window.destroy()
-
-    preview_window = Toplevel(main)
-    preview_window.title("Prediction Result")
-    display_img = pil_img.resize((400,400))
-    img_tk = ImageTk.PhotoImage(display_img)
-    Label(preview_window, image=img_tk).pack(padx=10,pady=10)
-    preview_window.image = img_tk
-    Label(preview_window, text=f"Prediction: {result}", font=("Segoe UI",14,"bold")).pack(pady=5)
-    Button(preview_window, text="Close", command=preview_window.destroy).pack(pady=5)
-
-    main_img_tk = ImageTk.PhotoImage(display_img.resize((300,300)))
-    img_panel.config(image=main_img_tk)
-
-# ================== DATASET UPLOAD ==================
-def uploadDataset():
-    global dataset_path
-    dataset_path = filedialog.askdirectory(initialdir=".")
-    if dataset_path:
-        text.insert(END, f"Fundus dataset loaded: {dataset_path}\n")
-        text.update()
-        update_progress(100, "Dataset loaded successfully")
-    else:
-        text.insert(END, "No folder selected.\n")
-        text.update()
-        update_progress(0, "Dataset not loaded")
-
-# ================== EXIT ==================
+    latent_points = generate_latent_points(200, 200) #making array of 200 to ask GAN to generate 200 images from train model
+    X = gan_model.predict(latent_points) #calling GAN predict model with 200 array size to generate image
+    for i in range(0,10):   #displying 200 images prediction will be difficult so randomly choosing 10 images out of 200 gan images
+        index = randrange(200) #randomly generating index 
+        img = X[index, :, :] #reading GAN image using random index
+        result = getPrediction(img)# calling get prediction method to predict severity of generated image
+        img = cv2.resize(img,(300,300)) #resizeing image
+        cv2.putText(img, 'Prediction Result : '+result, (10, 25),  cv2.FONT_HERSHEY_SIMPLEX,0.7, (0, 255, 255), 2)#displaying severity result on image
+        cv2.imshow('image id : '+str(index)+' Prediction Result : '+result,img)#severity result with image id
+    cv2.waitKey(0)
+    
+    
 def closeApp():
     main.destroy()
+    
 
-# ================== UI ==================
-sidebar = Frame(main, bg="#1e3a5f", width=280)
-sidebar.pack(side=LEFT, fill=Y)
-Label(sidebar, text="DR Detection System", bg="#1e3a5f", fg="white",
-      font=("Segoe UI", 20, "bold"), pady=20).pack()
+font = ('times', 16, 'bold')
+title = Label(main, text='Diabetic Retinopathy Detection from Eye Fundus Images with Generative Adversarial Network')
+title.config(bg='LightGoldenrod1', fg='medium orchid')  
+title.config(font=font)           
+title.config(height=3, width=120)       
+title.place(x=0,y=5)
 
-def on_enter(btn): btn.config(bg="#3e5c8a")
-def on_leave(btn): btn.config(bg="#334f73")
-def side_btn(txt, cmd):
-    b = Button(sidebar, text=txt, command=cmd, bg="#334f73", fg="white",
-               font=("Segoe UI",12,"bold"), relief=FLAT, pady=12)
-    b.pack(fill=X, padx=20, pady=10)
-    b.bind("<Enter>", lambda e: on_enter(b))
-    b.bind("<Leave>", lambda e: on_leave(b))
-    return b
+font1 = ('times', 12, 'bold')
+text=Text(main,height=20,width=100)
+scroll=Scrollbar(text)
+text.configure(yscrollcommand=scroll.set)
+text.place(x=480,y=100)
+text.config(font=font1)
 
-side_btn("📂 Upload Fundus Dataset", uploadDataset)
-side_btn("🧠 Load GAN Model", ganModel)
-side_btn("📊 Load Prediction Model", predictModel)
-side_btn("🧬 GAN Generate & Predict", predictSeverity)
-side_btn("🖼 Upload Image & Predict", uploadAndPredict)
-side_btn("❌ Exit", closeApp)
 
-# Main content frame
-content = Frame(main, bg="#f0f2f5")
-content.pack(side=RIGHT, fill=BOTH, expand=True, padx=20, pady=20)
-Label(content, text="Diabetic Retinopathy Detection", bg="#f0f2f5", fg="#111827",
-      font=("Segoe UI",22,"bold")).pack(anchor=W, pady=(0,10))
-Label(content, text="and Severity Grading from Fundus Images Using Hybrid GAN-CNN Framework",
-      bg="#f0f2f5", fg="#555", font=("Segoe UI",12)).pack(anchor=W, pady=(0,20))
+font1 = ('times', 14, 'bold')
+uploadButton = Button(main, text="Upload Fundus Dataset", command=upload)
+uploadButton.place(x=50,y=100)
+uploadButton.config(font=font1)  
 
-# Progress bar and status
-progress = ttk.Progressbar(content, length=450)
-progress.pack(anchor=W, pady=5)
-status_lbl = Label(content, text="Ready", bg="#f0f2f5", fg="#555", font=("Segoe UI",10))
-status_lbl.pack(anchor=W, pady=(0,10))
+ganButton = Button(main, text="Load GAN Model", command=ganModel)
+ganButton.place(x=50,y=150)
+ganButton.config(font=font1) 
 
-# Output text
-card = Frame(content, bg="white", bd=2, relief=RIDGE)
-card.pack(fill=X, pady=10)
-text = Text(card, height=10, font=("Consolas",10), bg="white", fg="#111827", relief=FLAT)
-text.pack(side=LEFT, fill=BOTH, expand=True, padx=10, pady=10)
-Scrollbar(card, command=text.yview).pack(side=RIGHT, fill=Y)
+modelButton = Button(main, text="Load Diabetic Retinopathy Prediction Model", command=predictModel)
+modelButton.place(x=50,y=200)
+modelButton.config(font=font1) 
 
-# Image preview
-img_card = Frame(content, bg="white", bd=2, relief=RIDGE)
-img_card.pack(pady=10)
-Label(img_card, text="Image Preview", bg="white", fg="#111827", font=("Segoe UI",12,"bold")).pack(pady=10)
-img_panel = Label(img_card, bg="#e5e7eb", width=300, height=300)
-img_panel.pack(padx=20, pady=10)
+predictButton = Button(main, text="Generate GAN Image & Predict Severity", command=predictSeverity)
+predictButton.place(x=50,y=250)
+predictButton.config(font=font1) 
 
+predictButton = Button(main, text="Manuvally Predict Severity", command=predictSeverity)
+predictButton.place(x=50,y=300)
+predictButton.config(font=font1)
+
+closeButton = Button(main, text="Exit", command=closeApp)
+closeButton.place(x=50,y=350)
+closeButton.config(font=font1)
+
+
+main.config(bg='OliveDrab2')
 main.mainloop()
