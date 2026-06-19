@@ -14,7 +14,6 @@ from numpy.random import randn
 import cv2
 from keras.models import load_model
 from matplotlib import pyplot
-from PIL import Image, ImageTk
 
 main = tkinter.Tk()
 main.title("Diabetic Retinopathy Detection from Eye Fundus Images with Generative Adversarial Network") #designing main screen
@@ -62,7 +61,7 @@ def predictModel():
         predict_model = model_from_json(loaded_model_json)
 
     predict_model.load_weights("model/train.h5")
-    #predict_model._make_predict_function()
+    predict_model._make_predict_function()
     print(predict_model.summary())
     text.insert(END,'See black console to view model summary')
 
@@ -89,7 +88,7 @@ def getPrediction(img):
 def predictSeverity():
     latent_points = generate_latent_points(200, 200) #making array of 200 to ask GAN to generate 200 images from train model
     X = gan_model.predict(latent_points) #calling GAN predict model with 200 array size to generate image
-    for i in range(0,5):   #displying 200 images prediction will be difficult so randomly choosing 10 images out of 200 gan images
+    for i in range(0,10):   #displying 200 images prediction will be difficult so randomly choosing 10 images out of 200 gan images
         index = randrange(200) #randomly generating index 
         img = X[index, :, :] #reading GAN image using random index
         result = getPrediction(img)# calling get prediction method to predict severity of generated image
@@ -102,57 +101,6 @@ def predictSeverity():
 def closeApp():
     main.destroy()
     
-
-def uploadAndPredict():
-    text.delete('1.0', END)
-    global filename
-    global preview_window, preview_img_tk, main_img_tk
-    # ask for a single image file
-    filename = filedialog.askopenfilename(initialdir='.', filetypes=[('Image files','*.jpg *.jpeg *.png *.bmp')])
-    if not filename:
-        return
-    # read image and prepare for prediction (use PIL to support Unicode paths)
-    try:
-        pil_loaded = Image.open(filename).convert('RGB')
-        img = np.array(pil_loaded)
-    except Exception as e:
-        messagebox.showerror('Error', 'Unable to open image file: ' + str(e))
-        return
-    img_resized = cv2.resize(img, (32, 32))
-    # get prediction (ensure prediction model is loaded first)
-    try:
-        result = getPrediction(img_resized)
-    except Exception as e:
-        messagebox.showerror('Error', 'Prediction model not loaded. Load model first.')
-        text.insert(END, 'Error: Prediction model not loaded. Click "Load Diabetic Retinopathy Prediction Model" first.\n')
-        return
-
-    # display result in the text area and show the image with label
-    text.insert(END, filename + '\nPrediction: ' + result + '\n')
-    # show image inside a Tkinter Toplevel window using PIL
-    if 'preview_window' in globals() and preview_window.winfo_exists():
-        preview_window.destroy()
-    preview_window = Toplevel(main)
-    preview_window.title('Prediction - ' + result)
-    img_display = cv2.resize(img, (500, 500))
-    pil_img = Image.fromarray(img_display)
-    preview_img_tk = ImageTk.PhotoImage(pil_img)
-    lbl = Label(preview_window, image=preview_img_tk)
-    lbl.image = preview_img_tk
-    lbl.pack()
-    btn_close = Button(preview_window, text='Close', command=preview_window.destroy)
-    btn_close.pack(pady=6)
-    lbl_text = Label(preview_window, text='Prediction: ' + result, font=('times', 14, 'bold'))
-    lbl_text.pack()
-    # also update embedded image in main window (smaller)
-    pil_emb = pil_img.resize((300, 300))
-    global main_img_tk
-    main_img_tk = ImageTk.PhotoImage(pil_emb)
-    try:
-        img_panel.config(image=main_img_tk)
-        img_panel.image = main_img_tk
-    except Exception:
-        pass
 
 font = ('times', 16, 'bold')
 title = Label(main, text='Diabetic Retinopathy Detection from Eye Fundus Images with Generative Adversarial Network')
@@ -167,10 +115,6 @@ scroll=Scrollbar(text)
 text.configure(yscrollcommand=scroll.set)
 text.place(x=480,y=100)
 text.config(font=font1)
-
-# Embedded image panel in main window
-img_panel = Label(main, bd=2, relief='sunken')
-img_panel.place(x=480, y=450)
 
 
 font1 = ('times', 14, 'bold')
@@ -190,13 +134,12 @@ predictButton = Button(main, text="Generate GAN Image & Predict Severity", comma
 predictButton.place(x=50,y=250)
 predictButton.config(font=font1) 
 
-
-singleButton = Button(main, text="Upload Image & Predict", command=uploadAndPredict)
-singleButton.place(x=50,y=300)
-singleButton.config(font=font1)
+predictButton = Button(main, text="Manuvally Predict Severity", command=predictSeverity)
+predictButton.place(x=50,y=300)
+predictButton.config(font=font1)
 
 closeButton = Button(main, text="Exit", command=closeApp)
-closeButton.place(x=50,y=350)
+closeButton.place(x=50,y=300)
 closeButton.config(font=font1)
 
 
